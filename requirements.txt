@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-google-genai
+pymupdf
+faiss-cpu
+sentence-transformers
+beautifulsoup4
+unstructured
+chromadb
