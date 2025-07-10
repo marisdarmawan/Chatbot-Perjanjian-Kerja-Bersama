@@ -1,6 +1,8 @@
 import os
 import streamlit as st
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+# DIUBAH: Impor model dari Google dan OpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
@@ -8,12 +10,12 @@ from langchain.memory import ConversationBufferMemory
 # --- Konfigurasi Awal ---
 st.set_page_config(page_title="Chatbot PKB PLN", page_icon="⚡", layout="wide")
 
-# Muat GOOGLE_API_KEY dari secrets Streamlit
-if 'GOOGLE_API_KEY' not in os.environ:
+# DIUBAH: Muat OPENAI_API_KEY dari secrets Streamlit
+if 'OPENAI_API_KEY' not in os.environ:
     try:
-        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
     except Exception as e:
-        st.error("Harap atur GOOGLE_API_KEY Anda di Streamlit secrets. Error: " + str(e))
+        st.error("Harap atur OPENAI_API_KEY Anda di Streamlit secrets. Error: " + str(e))
         st.stop()
 
 
@@ -25,7 +27,7 @@ def load_models_and_vector_store():
     Memuat model LLM, embeddings, dan vector store dari file lokal.
     """
     try:
-        # Inisialisasi model embeddings
+        # PENTING: Model embedding tetap menggunakan Google karena database dibuat dengan ini
         embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
         # Muat vector store dari file lokal
@@ -35,9 +37,10 @@ def load_models_and_vector_store():
             allow_dangerous_deserialization=True
         )
 
-        # Inisialisasi model Chat utama
-        # DIUBAH: Kita bisa gunakan gemini-1.5-flash untuk keseimbangan
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, convert_system_message_to_human=True)
+        # DIUBAH: Inisialisasi model Chat menggunakan OpenAI (ChatGPT)
+        # Model "gpt-3.5-turbo" adalah pilihan yang cepat dan hemat biaya.
+        # Untuk kemampuan lebih tinggi, Anda bisa ganti ke "gpt-4o" atau "gpt-4-turbo".
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
         
         return llm, vector_store
     except Exception as e:
@@ -46,15 +49,12 @@ def load_models_and_vector_store():
 
 def initialize_conversation_chain(_llm, _vector_store):
     """
-    DISEDERHANAKAN: Membuat chain percakapan dasar tanpa retriever canggih.
+    Membuat chain percakapan dasar.
     """
-    # 1. Membuat retriever dasar langsung dari vector store
     retriever = _vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     
-    # 2. Inisialisasi memori untuk menyimpan riwayat percakapan
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer')
 
-    # 3. Membuat ConversationalRetrievalChain standar
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=_llm,
         retriever=retriever,
@@ -64,46 +64,36 @@ def initialize_conversation_chain(_llm, _vector_store):
     return conversation_chain
 
 
-# --- Antarmuka Streamlit ---
+# --- Antarmuka Streamlit (Tidak ada perubahan di bagian ini) ---
 st.title("⚡ Chatbot Perjanjian Kerja Bersama (PKB) PT PLN")
 st.markdown("""
 Selamat datang! Saya adalah asisten AI yang dilatih khusus mengenai dokumen **PKB PT PLN Periode 2025-2027**.
 Silakan ajukan pertanyaan Anda terkait isi dokumen tersebut.
 """)
 
-# Muat model dan vector store
-# DIUBAH: Hanya memuat llm dan vector_store
 llm, vector_store = load_models_and_vector_store()
 
-# Inisialisasi state untuk menyimpan chain dan riwayat chat
 if "conversation" not in st.session_state:
-    # DIUBAH: Memanggil fungsi yang sudah disederhanakan
     st.session_state.conversation = initialize_conversation_chain(llm, vector_store)
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Menampilkan riwayat chat
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Input dari pengguna
 user_question = st.chat_input("Tanyakan sesuatu tentang PKB PT PLN...")
 
 if user_question:
-    # Tambahkan pertanyaan pengguna ke riwayat dan tampilkan
     st.session_state.chat_history.append({"role": "user", "content": user_question})
     with st.chat_message("user"):
         st.markdown(user_question)
 
-    # Proses pertanyaan dan dapatkan jawaban
     with st.spinner("Mencari jawaban..."):
         try:
-            # DISEDERHANAKAN: Logika pemanggilan tetap sama, tapi proses di belakangnya lebih simpel
             result = st.session_state.conversation({"question": user_question})
             answer = result["answer"]
 
-            # Tambahkan jawaban chatbot ke riwayat dan tampilkan
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
             with st.chat_message("assistant"):
                 st.markdown(answer)
