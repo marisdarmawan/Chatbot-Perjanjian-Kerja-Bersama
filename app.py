@@ -59,10 +59,10 @@ def load_models_and_vector_store():
         )
 
         # Inisialisasi model Chat utama
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1, convert_system_message_to_human=True)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1, convert_system_message_to_human=True)
         
         # Inisialisasi LLM untuk retriever
-        llm_retriever = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+        llm_retriever = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
         return llm, llm_retriever, vector_store
     except Exception as e:
