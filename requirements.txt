@@ -1,11 +1,11 @@
 streamlit
 langchain
 langchain-google-genai
+langchain_openai
+langchain_community
 pymupdf
 faiss-cpu
 sentence-transformers
 beautifulsoup4
 unstructured
 chromadb
-langchain-community
-langchain-openai
