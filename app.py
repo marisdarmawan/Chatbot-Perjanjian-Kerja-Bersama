@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-# DIUBAH: Impor model dari Google dan OpenAI
+# DIUBAH: Impor model dari Google (untuk embedding) dan OpenAI (untuk chat)
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
@@ -10,13 +10,20 @@ from langchain.memory import ConversationBufferMemory
 # --- Konfigurasi Awal ---
 st.set_page_config(page_title="Chatbot PKB PLN", page_icon="⚡", layout="wide")
 
-# DIUBAH: Muat OPENAI_API_KEY dari secrets Streamlit
-if 'OPENAI_API_KEY' not in os.environ:
+# DIUBAH: Muat OPENROUTER_API_KEY dari secrets Streamlit
+# Kita akan menyimpannya ke environment variable yang dikenali oleh library OpenAI
+if 'OPENROUTER_API_KEY' not in os.environ:
     try:
-        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+        # Menggunakan nama secret yang baru
+        openrouter_key = st.secrets["OPENROUTER_API_KEY"]
+        # Library LangChain/OpenAI secara default mencari 'OPENAI_API_KEY'
+        os.environ["OPENAI_API_KEY"] = openrouter_key
     except Exception as e:
-        st.error("Harap atur OPENAI_API_KEY Anda di Streamlit secrets. Error: " + str(e))
+        st.error("Harap atur OPENROUTER_API_KEY Anda di Streamlit secrets. Error: " + str(e))
         st.stop()
+else:
+    # Jika sudah ada, pastikan tetap diset ke env var yang benar
+    os.environ["OPENAI_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
 
 
 # --- Fungsi-Fungsi Inti dengan Cache ---
@@ -37,10 +44,17 @@ def load_models_and_vector_store():
             allow_dangerous_deserialization=True
         )
 
-        # DIUBAH: Inisialisasi model Chat menggunakan OpenAI (ChatGPT)
-        # Model "gpt-3.5-turbo" adalah pilihan yang cepat dan hemat biaya.
-        # Untuk kemampuan lebih tinggi, Anda bisa ganti ke "gpt-4o" atau "gpt-4-turbo".
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
+        # DIUBAH: Inisialisasi model Chat menggunakan OpenRouter
+        llm = ChatOpenAI(
+            model_name="meta-llama/llama-4-maverick:free", # Model gratis dari OpenRouter
+            temperature=0.2,
+            openai_api_base="https://openrouter.ai/api/v1", # Mengarahkan ke server OpenRouter
+            default_headers={
+                # GANTI DENGAN URL APLIKASI STREAMLIT ANDA
+                "HTTP-Referer": "https://chatbot-perjanjian-kerja-bersama.streamlit.app",
+                "X-Title": "Chatbot PKB PLN",
+            }
+        )
         
         return llm, vector_store
     except Exception as e:
@@ -67,7 +81,7 @@ def initialize_conversation_chain(_llm, _vector_store):
 # --- Antarmuka Streamlit (Tidak ada perubahan di bagian ini) ---
 st.title("⚡ Chatbot Perjanjian Kerja Bersama (PKB) PT PLN")
 st.markdown("""
-Selamat datang! Saya adalah asisten AI yang dilatih khusus mengenai dokumen **PKB PT PLN Periode 2025-2027**.
+Selamat datang! Saya adalah asisten AI yang ditenagai oleh **Llama 4 (via OpenRouter)** dan dilatih khusus mengenai dokumen **PKB PT PLN Periode 2025-2027**.
 Silakan ajukan pertanyaan Anda terkait isi dokumen tersebut.
 """)
 
@@ -89,7 +103,7 @@ if user_question:
     with st.chat_message("user"):
         st.markdown(user_question)
 
-    with st.spinner("Mencari jawaban..."):
+    with st.spinner("Llama sedang berpikir..."):
         try:
             result = st.session_state.conversation({"question": user_question})
             answer = result["answer"]
