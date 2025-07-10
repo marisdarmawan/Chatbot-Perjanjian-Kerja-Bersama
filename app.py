@@ -45,7 +45,7 @@ def load_llm_and_retriever():
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
     # Inisialisasi model Chat
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
 
     return llm, retriever
 
