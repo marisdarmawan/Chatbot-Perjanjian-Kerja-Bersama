@@ -1,113 +1,112 @@
 import os
 import streamlit as st
-# DIUBAH: Impor model dari Google (untuk embedding) dan OpenAI (untuk chat)
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
 # --- Konfigurasi Awal ---
-st.set_page_config(page_title="Chatbot PKB PLN", page_icon="⚡", layout="wide")
-
-# DIUBAH: Muat OPENROUTER_API_KEY dari secrets Streamlit
-# Kita akan menyimpannya ke environment variable yang dikenali oleh library OpenAI
-if 'OPENROUTER_API_KEY' not in os.environ:
+# Atur GOOGLE_API_KEY Anda.
+# Sebaiknya gunakan st.secrets untuk keamanan saat deploy.
+# Untuk pengembangan lokal, bisa set langsung.
+# Contoh: os.environ["GOOGLE_API_KEY"] = "AIza..."
+# Pastikan Anda telah mengatur GOOGLE_API_KEY di environment variables atau secrets Streamlit
+if 'GOOGLE_API_KEY' not in os.environ:
     try:
-        # Menggunakan nama secret yang baru
-        openrouter_key = st.secrets["OPENROUTER_API_KEY"]
-        # Library LangChain/OpenAI secara default mencari 'OPENAI_API_KEY'
-        os.environ["OPENAI_API_KEY"] = openrouter_key
-    except Exception as e:
-        st.error("Harap atur OPENROUTER_API_KEY Anda di Streamlit secrets. Error: " + str(e))
+        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+    except:
+        st.error("Harap atur GOOGLE_API_KEY Anda di Streamlit secrets.")
         st.stop()
-else:
-    # Jika sudah ada, pastikan tetap diset ke env var yang benar
-    os.environ["OPENAI_API_KEY"] = os.environ["OPENROUTER_API_KEY"]
 
 
-# --- Fungsi-Fungsi Inti dengan Cache ---
+# --- Fungsi-Fungsi Inti ---
 
 @st.cache_resource
-def load_models_and_vector_store():
+def load_llm_and_retriever():
     """
-    Memuat model LLM, embeddings, dan vector store dari file lokal.
+    Memuat model LLM dan retriever dari vector store yang sudah ada.
+    Menggunakan cache untuk performa.
     """
-    try:
-        # PENTING: Model embedding tetap menggunakan Google karena database dibuat dengan ini
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # Inisialisasi model embeddings
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-        # Muat vector store dari file lokal
+    # Muat vector store dari file lokal
+    try:
         vector_store = FAISS.load_local(
             "pkb_pln_faiss_index",
             embeddings,
-            allow_dangerous_deserialization=True
+            allow_dangerous_deserialization=True # Diperlukan untuk FAISS versi baru
         )
-
-        # DIUBAH: Inisialisasi model Chat menggunakan OpenRouter
-        llm = ChatOpenAI(
-            model_name="meta-llama/llama-4-maverick:free", # Model gratis dari OpenRouter
-            temperature=0.2,
-            openai_api_base="https://openrouter.ai/api/v1", # Mengarahkan ke server OpenRouter
-            default_headers={
-                # GANTI DENGAN URL APLIKASI STREAMLIT ANDA
-                "HTTP-Referer": "https://chatbot-perjanjian-kerja-bersama.streamlit.app",
-                "X-Title": "Chatbot PKB PLN",
-            }
-        )
-        
-        return llm, vector_store
     except Exception as e:
-        st.error(f"Gagal memuat model atau vector store. Pastikan folder 'pkb_pln_faiss_index' ada. Error: {e}")
+        st.error(f"Gagal memuat indeks FAISS. Pastikan folder 'pkb_pln_faiss_index' ada di direktori yang sama. Error: {e}")
         st.stop()
 
-def initialize_conversation_chain(_llm, _vector_store):
-    """
-    Membuat chain percakapan dasar.
-    """
-    retriever = _vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
-    
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer')
+    # Buat retriever dari vector store
+    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
+    # Inisialisasi model Chat
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+
+    return llm, retriever
+
+def initialize_conversation_chain(_llm, _retriever):
+    """
+    Membuat chain percakapan yang menyimpan riwayat obrolan.
+    """
+    # Inisialisasi memori untuk menyimpan riwayat percakapan
+    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+
+    # Buat chain percakapan
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=_llm,
-        retriever=retriever,
+        retriever=_retriever,
         memory=memory,
+        verbose=True # Tampilkan proses di terminal
     )
-    
     return conversation_chain
 
 
-# --- Antarmuka Streamlit (Tidak ada perubahan di bagian ini) ---
+# --- Antarmuka Streamlit ---
+
+st.set_page_config(page_title="Chatbot PKB PLN", page_icon="⚡")
+
 st.title("⚡ Chatbot Perjanjian Kerja Bersama (PKB) PT PLN")
 st.markdown("""
-Selamat datang! Saya adalah asisten AI yang ditenagai oleh **Llama 4 (via OpenRouter)** dan dilatih khusus mengenai dokumen **PKB PT PLN Periode 2025-2027**.
+Selamat datang! Saya adalah asisten AI yang dilatih khusus mengenai dokumen **PKB PT PLN Periode 2025-2027**.
 Silakan ajukan pertanyaan Anda terkait isi dokumen tersebut.
+Contoh: *'Berapa lama cuti melahirkan untuk pegawai wanita?'* atau *'Apa saja yang termasuk dalam kompensasi tetap?'*
 """)
 
-llm, vector_store = load_models_and_vector_store()
+# Muat model dan retriever
+llm, retriever = load_llm_and_retriever()
 
+# Inisialisasi state untuk menyimpan chain dan riwayat chat
 if "conversation" not in st.session_state:
-    st.session_state.conversation = initialize_conversation_chain(llm, vector_store)
+    st.session_state.conversation = initialize_conversation_chain(llm, retriever)
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# Menampilkan riwayat chat
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Input dari pengguna
 user_question = st.chat_input("Tanyakan sesuatu tentang PKB PT PLN...")
 
 if user_question:
+    # Tambahkan pertanyaan pengguna ke riwayat dan tampilkan
     st.session_state.chat_history.append({"role": "user", "content": user_question})
     with st.chat_message("user"):
         st.markdown(user_question)
 
-    with st.spinner("Llama sedang berpikir..."):
+    # Proses pertanyaan dan dapatkan jawaban
+    with st.spinner("Sedang mencari jawaban..."):
         try:
             result = st.session_state.conversation({"question": user_question})
             answer = result["answer"]
 
+            # Tambahkan jawaban chatbot ke riwayat dan tampilkan
             st.session_state.chat_history.append({"role": "assistant", "content": answer})
             with st.chat_message("assistant"):
                 st.markdown(answer)
