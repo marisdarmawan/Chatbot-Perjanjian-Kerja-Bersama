@@ -36,7 +36,7 @@ def load_models_and_vector_store():
         )
 
         # Inisialisasi model Chat utama
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2, convert_system_message_to_human=True)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, convert_system_message_to_human=True)
         
         return llm, vector_store
     except Exception as e:
